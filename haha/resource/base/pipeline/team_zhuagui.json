@@ -1,0 +1,131 @@
+{
+    // ======================================================================
+    // 组队任务示例：抓鬼（梦幻西游 / 问道类 5 人队）。
+    // 队长和队员各有一个入口，通过自定义动作实现跨实例同步：
+    //   TeamBarrier  同步点，全员到齐才继续
+    //   TeamPublish  队长往队伍黑板写“结束”标记
+    //   TeamFlag     队员识别黑板上的标记（自定义识别）
+    // 入口：队长 抓鬼_队长，队员 抓鬼_队员（见 config.yaml 的 tasks.抓鬼）
+    // ======================================================================
+
+    // ======================= 队长 =======================
+    "抓鬼_队长": {
+        "action": "Custom",
+        "custom_action": "TeamBarrier",
+        "custom_action_param": {"point": "抓鬼开始", "timeout": 180},
+        "next": ["抓鬼_队长_循环"]
+    },
+    "抓鬼_队长_循环": {
+        "timeout": 120000,
+        "next": [
+            "抓鬼_队长_完成",
+            "[JumpBack]战斗_入口",
+            "抓鬼_队长_对话",
+            "抓鬼_队长_寻路中",
+            "抓鬼_队长_追踪栏",
+            "[JumpBack]通用_确认",
+            "[JumpBack]通用_关闭弹窗",
+            "抓鬼_队长_领取"
+        ],
+        "on_error": ["[JumpBack]通用_回到主界面"]
+    },
+    // 完成：追踪栏显示 10/10，通知队员结束
+    "抓鬼_队长_完成": {
+        "recognition": "OCR",
+        "roi": [980, 160, 300, 260],
+        "expected": ["(抓鬼|捉鬼).*10/10"],
+        "action": "Custom",
+        "custom_action": "TeamPublish",
+        "custom_action_param": {"key": "抓鬼结束", "value": true},
+        "next": ["抓鬼_收尾同步"]
+    },
+    "抓鬼_队长_追踪栏": {
+        "recognition": "OCR",
+        "roi": [980, 160, 300, 260],
+        "expected": ["(抓鬼|捉鬼).*\\d+/\\d+"],
+        "action": "Custom",
+        "custom_action": "SaveProgress",
+        "custom_action_param": {"key": "抓鬼进度"},
+        "next": ["抓鬼_队长_点击追踪栏"]
+    },
+    "抓鬼_队长_点击追踪栏": {
+        "action": "Click",
+        "target": "抓鬼_队长_追踪栏",
+        "post_delay": 2000,
+        "next": ["抓鬼_队长_循环"]
+    },
+    "抓鬼_队长_寻路中": {
+        "recognition": "OCR",
+        "roi": [440, 420, 400, 80],
+        "expected": ["寻路中"],
+        "post_delay": 2000,
+        "next": ["抓鬼_队长_循环"]
+    },
+    // 与钟馗（或对应 NPC）对话
+    "抓鬼_队长_对话": {
+        "recognition": "OCR",
+        "roi": [700, 260, 580, 360],
+        "expected": ["抓鬼", "捉鬼", "好的", "继续"],
+        "order_by": "Expected",
+        "action": "Click",
+        "next": ["抓鬼_队长_循环"]
+    },
+    // 追踪栏没有任务时，从活动面板领取
+    "抓鬼_队长_领取": {
+        "recognition": "TemplateMatch",
+        "template": "shimen/活动按钮.png",
+        "roi": [960, 0, 320, 160],
+        "action": "Click",
+        "next": ["抓鬼_队长_活动面板"]
+    },
+    "抓鬼_队长_活动面板": {
+        "recognition": "OCR",
+        "expected": ["抓鬼", "捉鬼"],
+        "action": "Click",
+        "target_offset": [380, 0, 0, 0],
+        "timeout": 5000,
+        "next": ["抓鬼_队长_循环"],
+        "on_error": ["[JumpBack]通用_关闭弹窗"]
+    },
+
+    // ======================= 队员 =======================
+    // 队员不做决策：跟随队长，处理战斗和弹窗，等队长发出“结束”信号
+    "抓鬼_队员": {
+        "action": "Custom",
+        "custom_action": "TeamBarrier",
+        "custom_action_param": {"point": "抓鬼开始", "timeout": 180},
+        "next": ["抓鬼_队员_循环"]
+    },
+    "抓鬼_队员_循环": {
+        "timeout": 240000,          // 队长寻路较久时队员会一直等，适当放宽
+        "next": [
+            "抓鬼_队员_结束",
+            "[JumpBack]战斗_入口",
+            "[JumpBack]通用_确认",
+            "[JumpBack]通用_关闭弹窗",
+            "抓鬼_队员_跟随中"
+        ],
+        "on_error": ["[JumpBack]通用_回到主界面"]
+    },
+    // 黑板上出现“抓鬼结束”
+    "抓鬼_队员_结束": {
+        "recognition": "Custom",
+        "custom_recognition": "TeamFlag",
+        "custom_recognition_param": {"key": "抓鬼结束"},
+        "next": ["抓鬼_收尾同步"]
+    },
+    // 跟随状态标识（头顶或队伍栏的“跟随”字样），用于在等待期间刷新心跳，避免看门狗误判
+    "抓鬼_队员_跟随中": {
+        "recognition": "OCR",
+        "expected": ["跟随中", "暂离"],
+        "post_delay": 3000,
+        "next": ["抓鬼_队员_循环"]
+    },
+
+    // ======================= 共同收尾 =======================
+    "抓鬼_收尾同步": {
+        "action": "Custom",
+        "custom_action": "TeamBarrier",
+        "custom_action_param": {"point": "抓鬼结束", "timeout": 120}
+    }
+}

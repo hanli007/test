@@ -1,0 +1,101 @@
+# =====================================================================
+# MMO 多开自动化 配置示例
+# 复制为 config/config.yaml 后按实际情况修改。
+# 示例场景：5 个梦幻类账号组成一队（组队抓鬼 + 各自师门），外加 1 个传奇类账号挂机。
+# =====================================================================
+
+global:
+  log_dir: logs
+  state_db: data/state.db
+  resource_dirs:              # 资源目录，按顺序叠加加载（后加载的同名节点覆盖前面的）
+    - resource/base
+  daily_reset_hour: 0         # 游戏每日几点刷新（梦幻类一般 0 点，部分游戏 5 点）
+  max_parallel: 10            # 同时运行的账号上限（按电脑性能调整）
+  maa_debug: false            # true 时保存每次识别的截图，排查问题用，很占磁盘
+  loop_interval_sec: 30       # 没有可做任务时，多久检查一次
+  stuck_sec: 300              # 5 分钟没有任何节点推进视为卡死
+  max_recover: 3              # 每个账号每天最多自动恢复 3 次
+
+emulator:
+  adb_path: adb               # 建议填模拟器自带的 adb，如 C:/Program Files/Netease/MuMu/nx_main/adb.exe
+  # MuMu 12 多开示例（{index} 为实例序号）：
+  launch_cmd: '"C:/Program Files/Netease/MuMu/nx_main/MuMuManager.exe" control -v {index} launch'
+  shutdown_cmd: '"C:/Program Files/Netease/MuMu/nx_main/MuMuManager.exe" control -v {index} shutdown'
+  # 雷电 9 示例：
+  # launch_cmd: '"D:/leidian/LDPlayer9/ldconsole.exe" launch --index {index}'
+  # shutdown_cmd: '"D:/leidian/LDPlayer9/ldconsole.exe" quit --index {index}'
+  boot_wait_sec: 90
+  screencap_extras: true      # MuMu12 / 雷电9 的快速截图通道
+
+# ---------------------------------------------------------------------
+# 任务定义：entry 等字段引用 resource/base/pipeline/*.json 中的节点名
+# ---------------------------------------------------------------------
+tasks:
+  师门:
+    entry: 师门_开始
+    daily_limit: 1            # 一次运行就做完全部 20 轮，所以每天 1 次
+    priority: 20
+    timeout_min: 60
+    max_retry: 2
+    retry_cooldown_min: 5
+
+  抓鬼:
+    team: true
+    leader_entry: 抓鬼_队长
+    member_entry: 抓鬼_队员
+    daily_limit: 2            # 每天两轮（每轮 10 只）
+    priority: 10              # 组队任务优先
+    windows: ["10:00-23:30"]  # 只在这个时间段组队
+    timeout_min: 45
+
+  挂机:
+    entry: 挂机_开始
+    daily_limit: 6            # 每次 30 分钟，每天 6 次 = 3 小时
+    priority: 50
+    timeout_min: 40
+    retry_cooldown_min: 2
+
+
+# ---------------------------------------------------------------------
+# 账号：每个账号绑定一个设备。名字随意，但要唯一。
+# ---------------------------------------------------------------------
+accounts:
+  - name: 梦幻1
+    package: com.netease.my       # 游戏包名，用 adb shell pm list packages 查
+    device: {type: adb, address: "127.0.0.1:16384", emulator_index: 0}
+    tasks: [师门]
+  - name: 梦幻2
+    package: com.netease.my
+    device: {type: adb, address: "127.0.0.1:16416", emulator_index: 1}
+    tasks: [师门]
+  - name: 梦幻3
+    package: com.netease.my
+    device: {type: adb, address: "127.0.0.1:16448", emulator_index: 2}
+    tasks: [师门]
+  - name: 梦幻4
+    package: com.netease.my
+    device: {type: adb, address: "127.0.0.1:16480", emulator_index: 3}
+    tasks: [师门]
+  - name: 梦幻5
+    package: com.netease.my
+    device: {type: adb, address: "127.0.0.1:16512", emulator_index: 4}
+    tasks: [师门]
+
+  - name: 传奇1
+    package: com.example.legend
+    device: {type: adb, address: "127.0.0.1:16544", emulator_index: 5}
+    tasks: [挂机]
+
+  # PC 端游示例（仅 Windows）：按窗口标题正则匹配
+  # - name: 端游1
+  #   device: {type: win32, window_title: "^梦幻西游"}
+  #   tasks: [师门]
+
+# ---------------------------------------------------------------------
+# 队伍：leader 负责接任务和带路，members 跟随
+# ---------------------------------------------------------------------
+teams:
+  - name: 一队
+    leader: 梦幻1
+    members: [梦幻2, 梦幻3, 梦幻4, 梦幻5]
+    tasks: [抓鬼]

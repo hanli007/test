@@ -1,0 +1,5 @@
+maafw>=5.16
+pyyaml>=6.0
+numpy>=1.26
+# 可选：训练 YOLO 时才需要
+# ultralytics>=8.3

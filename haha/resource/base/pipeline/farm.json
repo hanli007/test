@@ -1,0 +1,135 @@
+{
+    // ======================================================================
+    // 即时制挂机打怪（传奇类）。
+    // 主体是自定义动作 FarmLoop（custom/actions.py），它在 Python 里高频循环，
+    // 每一轮引用下面这些节点做识别和点击 —— 换游戏只需要改这些节点和模板图。
+    // 入口：挂机_开始
+    // ======================================================================
+
+    "挂机_开始": {
+        "action": "Custom",
+        "custom_action": "FarmLoop",
+        "custom_action_param": {
+            "duration_sec": 1800,
+            "monster_node": "挂机_识别怪物",
+            "loot_node": "挂机_识别掉落",
+            "hp_low_node": "挂机_血量低",
+            "potion_node": "挂机_吃药",
+            "bag_full_node": "挂机_背包已满",
+            "dead_node": "挂机_死亡",
+            "wander_node": "挂机_换位置",
+            "attack_wait_ms": 1500,
+            "idle_limit": 10
+        },
+        "next": ["挂机_需要清包", "挂机_结束"]
+    },
+
+    // ---------- 循环中被引用的识别 / 动作节点 ----------
+
+    // 怪物识别（模板匹配版）：适合怪物外形固定、背景干净的地图。
+    // 把同一地图的多种怪物截图放进 farm/怪物/ 文件夹即可全部匹配。
+    "挂机_识别怪物": {
+        "recognition": "TemplateMatch",
+        "template": "farm/怪物",
+        "threshold": 0.75,
+        "roi": [0, 80, 1280, 520],
+        "order_by": "Score",
+        "action": "Click"
+    },
+
+    // 怪物识别（YOLO 版）：模板匹配效果差时启用。
+    // 用 tools/yolo_train.py 训练并导出 ONNX，放到 model/detect/monster.onnx，
+    // 然后把 FarmLoop 参数中的 monster_node 改成 "挂机_识别怪物_YOLO"。
+    "挂机_识别怪物_YOLO": {
+        "recognition": "NeuralNetworkDetect",
+        "model": "monster.onnx",
+        "expected": ["monster"],
+        "threshold": 0.5,
+        "roi": [0, 80, 1280, 520],
+        "order_by": "Score",
+        "action": "Click"
+    },
+
+    // 地上掉落物（装备/金币图标），可放多张到 farm/掉落物/
+    "挂机_识别掉落": {
+        "recognition": "TemplateMatch",
+        "template": "farm/掉落物",
+        "threshold": 0.8,
+        "roi": [0, 80, 1280, 520],
+        "action": "Click"
+    },
+
+    // 血量低：左上角红色血条占比低于 35%（BGR 颜色范围按实际血条颜色调整）
+    "挂机_血量低": {
+        "recognition": "Custom",
+        "custom_recognition": "BarBelow",
+        "custom_recognition_param": {
+            "roi": [70, 22, 160, 10],
+            "lower": [0, 0, 150],
+            "upper": [90, 90, 255],
+            "below": 0.35
+        }
+    },
+
+    // 吃药：点击快捷栏第一格（端游可改成 "action": "ClickKey", "key": 49 即数字键 1）
+    "挂机_吃药": {
+        "action": "Click",
+        "target": [980, 640, 50, 50]
+    },
+
+    "挂机_背包已满": {
+        "recognition": "OCR",
+        "expected": ["背包已满", "包裹已满", "背包空间不足"]
+    },
+
+    "挂机_死亡": {
+        "recognition": "OCR",
+        "expected": ["你已死亡", "回城复活", "原地复活"]
+    },
+
+    // 一直没怪时：向上推摇杆 1.5 秒换个位置（端游可改成按住方向键 / 点击小地图）
+    "挂机_换位置": {
+        "action": "Swipe",
+        "begin": [140, 560, 20, 20],
+        "end": [140, 460, 20, 20],
+        "duration": 1500
+    },
+
+    // ---------- 挂机结束后的处理 ----------
+    // 背包满了 → 回城卖东西 → 清除“背包已满”标记
+    "挂机_需要清包": {
+        "recognition": "Custom",
+        "custom_recognition": "KvCompare",
+        "custom_recognition_param": {"key": "背包已满", "op": "eq", "value": true},
+        "next": ["挂机_回城"]
+    },
+    "挂机_回城": {
+        "recognition": "TemplateMatch",
+        "template": "farm/回城石.png",
+        "action": "Click",
+        "post_delay": 5000,
+        "next": ["挂机_打开回收"]
+    },
+    "挂机_打开回收": {
+        "recognition": "OCR",
+        "expected": ["回收", "出售", "一键回收"],
+        "action": "Click",
+        "timeout": 30000,
+        "next": ["挂机_确认回收"]
+    },
+    "挂机_确认回收": {
+        "recognition": "OCR",
+        "expected": ["^确定$", "^确认回收$", "^回收$"],
+        "action": "Click",
+        "next": ["挂机_清除背包标记"]
+    },
+    "挂机_清除背包标记": {
+        "action": "Custom",
+        "custom_action": "SaveKv",
+        "custom_action_param": {"key": "背包已满", "value": false},
+        "next": ["[JumpBack]通用_关闭弹窗", "挂机_结束"]
+    },
+
+    // 结束节点：无识别（DirectHit 必定命中），next 为空 → 任务成功结束
+    "挂机_结束": {}
+}

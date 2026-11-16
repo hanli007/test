@@ -1,0 +1,23 @@
+{
+    // 默认参数：所有节点未显式指定的字段使用这里的值。
+    // 坐标体系：MAA 会把截图缩放到短边 720（即 1280x720），所有 roi/target 坐标都按 1280x720 写。
+    "Default": {
+        "rate_limit": 500,      // 每轮识别最少间隔 500ms，老游戏界面变化慢，不需要更快
+        "timeout": 20000,       // next 列表 20 秒都没命中就进入 on_error
+        "pre_delay": 200,
+        "post_delay": 500       // 点击后等待界面响应
+    },
+    "TemplateMatch": {
+        "recognition": "TemplateMatch",
+        "threshold": 0.8,       // 2D 固定 UI，阈值可以设高一点，减少误点
+        "method": 5
+    },
+    "OCR": {
+        "recognition": "OCR",
+        "threshold": 0.3
+    },
+    "Click": {
+        "action": "Click",
+        "target": true
+    }
+}
